@@ -6,7 +6,7 @@ At the moment it only reads half the cores as it assumes SMT.
 
 Compile with:
 
-gcc -o ryzen ryzen.c -lm
+make
 
 Needs access to /dev/cpu/CPUNO/msr files. So may need root rights
 
