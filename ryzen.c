@@ -162,10 +162,10 @@ static int rapl_msr_amd_core() {
 		core_energy[i] = core_energy_raw * energy_unit_d;
 		
 	}
-	int package_pwr = read_msr(fd[0], AMD_MSR_PACKAGE_ENERGY) * energy_unit_d;
+	double package_pwr = read_msr(fd[0], AMD_MSR_PACKAGE_ENERGY) * energy_unit_d;
 	
 	usleep(100000);
-	int package_dpwr = read_msr(fd[0], AMD_MSR_PACKAGE_ENERGY) * energy_unit_d;
+	double package_dpwr = read_msr(fd[0], AMD_MSR_PACKAGE_ENERGY) * energy_unit_d;
 	for (int i = 0; i < total_cores/2; i++) {
 		core_energy_raw = read_msr(fd[i], AMD_MSR_CORE_ENERGY);
 		core_energy_delta[i] = core_energy_raw * energy_unit_d;
