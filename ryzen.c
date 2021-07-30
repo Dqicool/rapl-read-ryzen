@@ -60,14 +60,14 @@ static int detect_packages(void) {
 
 	for(i=0;i<MAX_PACKAGES;i++) package_map[i]=-1;
 
-	printf("\t");
+	//printf("\t");
 	for(i=0;i<MAX_CPUS;i++) {
 		sprintf(filename,"/sys/devices/system/cpu/cpu%d/topology/physical_package_id",i);
 		fff=fopen(filename,"r");
 		if (fff==NULL) break;
 		fscanf(fff,"%d",&package);
-		printf("%d (%d)",i,package);
-		if (i%8==7) printf("\n\t"); else printf(", ");
+		//printf("%d (%d)",i,package);
+		//if (i%8==7) printf("\n\t"); else printf(", ");
 		fclose(fff);
 
 		if (package_map[package]==-1) {
@@ -77,12 +77,12 @@ static int detect_packages(void) {
 
 	}
 
-	printf("\n");
+	//printf("\n");
 
 	total_cores=i;
 
-	printf("\tDetected %d cores in %d packages\n\n",
-		total_cores,total_packages);
+	//printf("\tDetected %d cores in %d packages\n\n",
+	//	total_cores,total_packages);
 
 	return 0;
 }
@@ -141,49 +141,68 @@ static int rapl_msr_amd_core() {
 	}
 	
 	int core_energy_units = read_msr(fd[0], AMD_MSR_PWR_UNIT);
-	printf("Core energy units: %x\n",core_energy_units);
+	//printf("Core energy units: %x\n",core_energy_units);
 	
 	time_unit = (core_energy_units & AMD_TIME_UNIT_MASK) >> 16;
 	energy_unit = (core_energy_units & AMD_ENERGY_UNIT_MASK) >> 8;
 	power_unit = (core_energy_units & AMD_POWER_UNIT_MASK);
-	printf("Time_unit:%d, Energy_unit: %d, Power_unit: %d\n", time_unit, energy_unit, power_unit);
+	//printf("Time_unit:%d, Energy_unit: %d, Power_unit: %d\n", time_unit, energy_unit, power_unit);
 	
 	time_unit_d = pow(0.5,(double)(time_unit));
 	energy_unit_d = pow(0.5,(double)(energy_unit));
 	power_unit_d = pow(0.5,(double)(power_unit));
-	printf("Time_unit:%g, Energy_unit: %g, Power_unit: %g\n", time_unit_d, energy_unit_d, power_unit_d);
+	//printf("Time_unit:%g, Energy_unit: %g, Power_unit: %g\n", time_unit_d, energy_unit_d, power_unit_d);
 	
-	int core_energy_raw;
-	int package_raw;
-	// Read per core energy values
-	for (int i = 0; i < total_cores/2; i++) {
-		core_energy_raw = read_msr(fd[i], AMD_MSR_CORE_ENERGY);
-		package_raw = read_msr(fd[i], AMD_MSR_PACKAGE_ENERGY);
-		core_energy[i] = core_energy_raw * energy_unit_d;
+	for(;;)
+	{
+		system("clear");
+		int core_energy_raw;
+		int package_raw;
+		// Read per core energy values
+		for (int i = 0; i < total_cores/2; i++) {
+			core_energy_raw = read_msr(fd[i], AMD_MSR_CORE_ENERGY);
+			package_raw = read_msr(fd[i], AMD_MSR_PACKAGE_ENERGY);
+			core_energy[i] = core_energy_raw * energy_unit_d;
+			
+		}
+		double package_pwr = read_msr(fd[0], AMD_MSR_PACKAGE_ENERGY) * energy_unit_d;
 		
+		usleep(100000);
+		double package_dpwr = read_msr(fd[0], AMD_MSR_PACKAGE_ENERGY) * energy_unit_d;
+		for (int i = 0; i < total_cores/2; i++) {
+			core_energy_raw = read_msr(fd[i], AMD_MSR_CORE_ENERGY);
+			core_energy_delta[i] = core_energy_raw * energy_unit_d;
+		}
+		double pkg_power_fin = (package_dpwr - package_pwr) * 10;
+		double sum = 0;
+		for(int i = 0; i < total_cores/2; i++) {
+			double diff = (core_energy_delta[i] - core_energy[i])*10;
+			sum += diff;
+
+			int diff_int = diff;
+			int diff_deci = (int)(100.0*(diff-(double)diff_int));
+		printf("Core %3d:\t%3d.%02d W\n", i, diff_int, diff_deci);
+		}
+		int sum_int = sum;
+		int sum_deci = (int)(100.0*(sum-(double)sum_int));
+		int pkg_power_fin_int = pkg_power_fin;
+		int pkg_power_fin_deci = (int)(100.0*(pkg_power_fin-(double)pkg_power_fin_int));
+		double uncore = pkg_power_fin - sum;
+		int uncore_int = uncore;
+		int uncore_deci = (int)(100.0*(uncore-(double)uncore_int));
+		printf("\n");
+		printf("Cores:  \t%3d.%02d W\n", sum_int, sum_deci);
+		printf("Uncore: \t%3d.%02d W\n", uncore_int, uncore_deci);
+		printf("Package:\t%3d.%02d W\n", pkg_power_fin_int, pkg_power_fin_deci);
+		sleep(1);
 	}
-	double package_pwr = read_msr(fd[0], AMD_MSR_PACKAGE_ENERGY) * energy_unit_d;
 	
-	usleep(100000);
-	double package_dpwr = read_msr(fd[0], AMD_MSR_PACKAGE_ENERGY) * energy_unit_d;
-	for (int i = 0; i < total_cores/2; i++) {
-		core_energy_raw = read_msr(fd[i], AMD_MSR_CORE_ENERGY);
-		core_energy_delta[i] = core_energy_raw * energy_unit_d;
-	}
-	double pkg_power_fin = (package_dpwr - package_pwr) * 10;
-	double sum = 0;
-	for(int i = 0; i < total_cores/2; i++) {
-		double diff = (core_energy_delta[i] - core_energy[i])*10;
-		sum += diff;
-		printf("Core %d, energy used: %gW\n", i, diff);
-	}
-	
-	printf("Core sum: %gW\t package: %gW\n", sum, pkg_power_fin);
 	
 	free(core_energy);
 	free(core_energy_delta);
 	free(package);
 	free(package_delta);
+	
 	free(fd);
 	
 	return 0;
@@ -192,6 +211,7 @@ static int rapl_msr_amd_core() {
 int main(int argc, char **argv) {
 	detect_packages();
 	rapl_msr_amd_core();
+	
 	
 	return 0;
 }
